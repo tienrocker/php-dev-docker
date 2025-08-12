@@ -1,0 +1,202 @@
+services:
+  traefik:
+    image: "traefik:v3.5.0"
+    container_name: traefik
+    restart: always
+    command:
+      - --log.level=DEBUG
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - traefikNetwork
+
+  php-apache-7:
+    #build:
+      #dockerfile: ./php7/Dockerfile
+    image: tienrocker/php-apache-phalcon3:1.0.2
+    container_name: php_apache_7_phalcon3
+    restart: always
+    #deploy:
+      #mode: replicated
+      #replicas: 3
+    depends_on:
+      - traefik
+      - mysql
+      - mongodb
+      - redis
+    volumes:
+      - "D:\\www:/var/www/html"
+      - "./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini"
+      - "./apache2.conf:/etc/apache2/apache2.conf"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.php7-http.rule=Host(`localhost`)"
+      - "traefik.http.routers.php7-http.entrypoints=web"
+      - "traefik.http.routers.php7-http.service=php7-svc"
+      - "traefik.http.routers.php7-https.rule=Host(`localhost`)"
+      - "traefik.http.routers.php7-https.entrypoints=websecure"
+      - "traefik.http.routers.php7-https.tls=true"
+      - "traefik.http.routers.php7-https.service=php7-svc"
+      - "traefik.http.services.php7-svc.loadbalancer.server.port=80"
+    networks:
+      - traefikNetwork
+
+  php-apache-82:
+    build:
+      dockerfile: ./php82/Dockerfile
+    container_name: php_apache_82
+    restart: always
+    depends_on:
+      - traefik
+      - mysql
+      - mongodb
+      - redis
+    volumes:
+      - "D:\\www:/var/www/html"
+      - "./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini"
+      - "./apache2.conf:/etc/apache2/apache2.conf"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.php82-http.rule=Host(`php82.localhost`)"
+      - "traefik.http.routers.php82-http.entrypoints=web"
+      - "traefik.http.routers.php82-http.service=php82-svc"
+      - "traefik.http.routers.php82-https.rule=Host(`php82.localhost`)"
+      - "traefik.http.routers.php82-https.entrypoints=websecure"
+      - "traefik.http.routers.php82-https.tls=true"
+      - "traefik.http.routers.php82-https.service=php82-svc"
+      - "traefik.http.services.php82-svc.loadbalancer.server.port=80"
+    networks:
+      - traefikNetwork
+
+
+  php-apache-83:
+    build:
+      dockerfile: ./php83/Dockerfile
+    container_name: php_apache_83
+    restart: always
+    depends_on:
+      - traefik
+      - mysql
+      - mongodb
+      - redis
+    volumes:
+      - "D:\\www:/var/www/html"
+      - "./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini"
+      - "./apache2.conf:/etc/apache2/apache2.conf"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.php83-http.rule=Host(`php83.localhost`)"
+      - "traefik.http.routers.php83-http.entrypoints=web"
+      - "traefik.http.routers.php83-http.service=php83-svc"
+      - "traefik.http.routers.php83-https.rule=Host(`php83.localhost`)"
+      - "traefik.http.routers.php83-https.entrypoints=websecure"
+      - "traefik.http.routers.php83-https.tls=true"
+      - "traefik.http.routers.php83-https.service=php83-svc"
+      - "traefik.http.services.php83-svc.loadbalancer.server.port=80"
+    networks:
+      - traefikNetwork
+
+  mysql:
+    image: "mysql:8.0.35"
+    container_name: mysql_db
+    restart: always
+    depends_on:
+      - traefik
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-rootPASS}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-dbase}"
+      MYSQL_USER: "${MYSQL_USER:-dbuser}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-dbpass}"
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - traefikNetwork
+
+  phpmyadmin:
+    image: "phpmyadmin/phpmyadmin:latest"
+    container_name: phpmyadmin
+    restart: always
+    depends_on:
+      - mysql
+    links:
+      - mysql
+    volumes:
+      - "./phpmyadmin/config.inc.php:/etc/phpmyadmin/config.user.inc.php"
+    environment:
+      PMA_HOST: "mysql"
+      PMA_PORT: "3306"
+      UPLOAD_LIMIT: "256M"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`phpmyadmin.localhost`)"
+      - "traefik.http.routers.phpmyadmin.entrypoints=web"
+      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+    networks:
+      - traefikNetwork
+
+  mongodb:
+    image: mongo:8.0.3
+    container_name: mongodb
+    restart: always
+    depends_on:
+      - traefik
+    volumes:
+      - ./data/mongo:/data/db
+      - ./data/mongo-config:/data/configdb
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - traefikNetwork
+
+  redis:
+    image: redis:7.4.2-alpine
+    container_name: redis
+    restart: always
+    depends_on:
+      - traefik
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - traefikNetwork
+
+networks:
+  traefikNetwork:
+    name: traefikNetwork
+    driver: bridge
